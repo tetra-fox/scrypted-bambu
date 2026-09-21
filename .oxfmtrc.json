@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "useTabs": false,
+  "singleQuote": false,
+  "trailingComma": "none",
+  "semi": true,
+  "endOfLine": "lf",
+  "bracketSameLine": true,
+  "printWidth": 100,
+  "quoteProps": "consistent",
+  "sortImports": true,
+  "sortPackageJson": false,
+  "ignorePatterns": ["pnpm-lock.yaml", "flake.lock", "/out/", "/dist/"]
+}

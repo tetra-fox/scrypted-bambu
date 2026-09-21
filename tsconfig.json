@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "ES2021",
+    "resolveJsonModule": true,
+    "moduleResolution": "Node16",
+    "types": ["node"],
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "strict": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/**/*", "tools/**/*"]
+}

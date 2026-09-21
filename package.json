@@ -1,0 +1,60 @@
+{
+  "name": "@tetra-fox/scrypted-bambu",
+  "version": "0.1.0",
+  "description": "Bambu Lab printer cameras for Scrypted",
+  "author": "tetra",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetra-fox/scrypted-bambu.git"
+  },
+  "files": [
+    "dist/plugin.zip"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "format": "oxfmt .",
+    "lint": "oxfmt --check . && oxlint",
+    "fmt": "pnpm format",
+    "build": "node node_modules/@scrypted/sdk/dist/src/bin/scrypted-webpack.js",
+    "prepublishOnly": "NODE_ENV=production node node_modules/@scrypted/sdk/dist/src/bin/scrypted-webpack.js",
+    "scrypted-deploy": "node node_modules/@scrypted/sdk/dist/src/bin/scrypted-deploy.js",
+    "scrypted-deploy-debug": "node node_modules/@scrypted/sdk/dist/src/bin/scrypted-deploy-debug.js",
+    "scrypted-debug": "node node_modules/@scrypted/sdk/dist/src/bin/scrypted-debug.js"
+  },
+  "keywords": [
+    "scrypted",
+    "plugin",
+    "bambu",
+    "camera"
+  ],
+  "scrypted": {
+    "name": "Bambu Lab",
+    "type": "DeviceProvider",
+    "interfaces": [
+      "ScryptedSystemDevice",
+      "ScryptedDeviceCreator",
+      "DeviceProvider",
+      "DeviceCreator"
+    ],
+    "pluginDependencies": [
+      "@scrypted/prebuffer-mixin",
+      "@scrypted/snapshot"
+    ],
+    "rollup": true
+  },
+  "devDependencies": {
+    "@scrypted/client": "^1.3.26",
+    "@types/node": "^24.13.6",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0"
+  },
+  "dependencies": {
+    "@scrypted/sdk": "^0.5.59"
+  }
+}
