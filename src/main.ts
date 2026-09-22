@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 import sdk, {
   type DeviceCreator,
   type DeviceCreatorSettings,
@@ -9,7 +7,15 @@ import sdk, {
   type Setting
 } from "@scrypted/sdk";
 
-import { BambuPrinter, type CameraKind, detectCamera, interfacesFor } from "./printer.ts";
+import { identifyPrinter } from "./identify.ts";
+import {
+  BambuPrinter,
+  type CameraKind,
+  cameraForModel,
+  detectCamera,
+  infoFor,
+  interfacesFor
+} from "./printer.ts";
 
 const { deviceManager } = sdk;
 
@@ -28,7 +34,7 @@ class BambuProvider extends ScryptedDeviceBase implements DeviceProvider, Device
       {
         key: "name",
         title: "Name",
-        placeholder: "P1S"
+        description: "Defaults to the model the printer reports, e.g. Bambu Lab P1S."
       },
       {
         key: "host",
@@ -48,7 +54,7 @@ class BambuProvider extends ScryptedDeviceBase implements DeviceProvider, Device
         choices: ["auto", "chamber", "rtsp"],
         value: "auto",
         description:
-          "auto asks the printer: rtsp when port 322 answers (X1, H2, P2), otherwise the chamber image protocol (P1, A1)."
+          "auto picks by model: chamber image protocol for P1 and A1, rtsp for X1, H2 and P2. Unknown models are probed on port 322."
       }
     ];
   }
@@ -57,20 +63,21 @@ class BambuProvider extends ScryptedDeviceBase implements DeviceProvider, Device
     const host = String(settings.host ?? "").trim();
     const accessCode = String(settings.accessCode ?? "").trim();
     if (!host || !accessCode) throw new Error("ip address and access code are required");
+    const identity = await identifyPrinter(host, accessCode);
     const requested = String(settings.camera ?? "auto");
     const camera: CameraKind =
-      requested === "auto" ? await detectCamera(host) : (requested as CameraKind);
+      requested === "auto"
+        ? (cameraForModel(identity.model) ?? (await detectCamera(host)))
+        : (requested as CameraKind);
 
-    const nativeId = randomBytes(4).toString("hex");
+    // the serial as native id makes adding the same printer twice update it instead
+    const nativeId = identity.serial;
     const id = await deviceManager.onDeviceDiscovered({
       nativeId,
-      name: String(settings.name || "").trim() || "Bambu Printer",
+      name: String(settings.name || "").trim() || `Bambu Lab ${identity.model ?? "Printer"}`,
       type: ScryptedDeviceType.Camera,
       interfaces: interfacesFor(camera),
-      info: {
-        manufacturer: "Bambu Lab",
-        ip: host
-      }
+      info: infoFor(host, identity)
     });
     const printer = await this.getDevice(nativeId);
     printer.storageSettings.values.host = host;

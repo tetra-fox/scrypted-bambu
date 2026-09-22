@@ -14,7 +14,7 @@ The RTSP path is written from the published stream URL and has not been tested a
 ## setup
 
 1. Put the printer in LAN mode or at least note its IP and the access code from the printer screen (Settings, Network).
-2. In Scrypted, add a device of type Bambu Lab Printer. Fill in the IP and access code. Leave Camera on auto: it asks the printer whether port 322 answers and picks rtsp or chamber from that.
+2. In Scrypted, add a device of type Bambu Lab Printer and fill in the IP and access code. Leave Camera on auto unless the printer is a model this plugin does not know, in which case it probes port 322.
 3. Enable the extensions you want on the new camera (HomeKit, NVR).
 
 ## caveats
@@ -36,6 +36,7 @@ pnpm fmt              # oxfmt
 To interface with printers directly:
 
 ```sh
+node tools/identify.mts <ip> <access code>       # serial, model, firmware, nozzle
 node tools/chamber-probe.mts <ip> <access code>  # grabs frames, saves the first to /tmp/chamber-probe.jpg
 node tools/stream-check.mts <ip> <access code>   # runs the exact ffmpeg pipeline for 12s and reports output fps
 ```

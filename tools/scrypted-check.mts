@@ -29,7 +29,9 @@ const id = await provider.createDevice({
 const printer = sdk.systemManager.getDeviceById<ScryptedDevice & Camera & VideoCamera & Settings>(
   id
 );
-console.log("created", id, "interfaces", printer.interfaces.join(", "));
+console.log("created", id, "as", JSON.stringify(printer.name), "native id", printer.nativeId);
+console.log("info:", JSON.stringify(printer.info));
+console.log("interfaces:", printer.interfaces.join(", "));
 const settings = await printer.getSettings();
 console.log("camera setting:", settings.find((s) => s.key === "camera")?.value);
 

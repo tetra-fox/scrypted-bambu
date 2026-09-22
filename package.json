@@ -1,6 +1,6 @@
 {
   "name": "@tetra-fox/scrypted-bambu",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Bambu Lab printer cameras for Scrypted",
   "author": "tetra",
   "license": "GPL-3.0-only",

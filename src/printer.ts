@@ -4,6 +4,7 @@ import { connect } from "node:net";
 import sdk, {
   type AudioStreamOptions,
   type Camera,
+  type DeviceInformation,
   type FFmpegInput,
   type MediaObject,
   type MediaStreamUrl,
@@ -22,6 +23,7 @@ import { StorageSettings } from "@scrypted/sdk/storage-settings";
 
 import { ChamberClient } from "./chamber.ts";
 import { FrameFeed } from "./feed.ts";
+import { identifyPrinter, type PrinterIdentity } from "./identify.ts";
 import { chamberInputArguments, DEFAULT_ENCODER_ARGUMENTS, splitArguments } from "./pipeline.ts";
 
 const { deviceManager, mediaManager } = sdk;
@@ -37,6 +39,25 @@ const IDLE_MS = 60000;
 
 // the sdk types audio as optional, rebroadcast only reads an explicit null as no audio
 const NO_AUDIO = null as unknown as AudioStreamOptions;
+
+const CHAMBER_MODELS = new Set(["P1P", "P1S", "A1", "A1 mini"]);
+const RTSP_MODELS = new Set(["X1", "X1C", "X1E", "H2C", "H2D", "H2D Pro", "H2S", "P2S", "X2D"]);
+
+export const cameraForModel = (model: string | undefined): CameraKind | undefined => {
+  if (model && CHAMBER_MODELS.has(model)) return "chamber";
+  if (model && RTSP_MODELS.has(model)) return "rtsp";
+  return undefined;
+};
+
+export const infoFor = (host: string, identity: PrinterIdentity): DeviceInformation => ({
+  manufacturer: "Bambu Lab",
+  model: identity.model,
+  serialNumber: identity.serial,
+  firmware: identity.firmware,
+  version: identity.hardware,
+  ip: host,
+  metadata: { nozzleDiameter: identity.nozzleDiameter, nozzleType: identity.nozzleType }
+});
 
 export const interfacesFor = (camera: CameraKind): ScryptedInterface[] => {
   const interfaces = [ScryptedInterface.VideoCamera, ScryptedInterface.Settings];
@@ -181,13 +202,13 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
     host: {
       title: "IP Address",
       placeholder: "192.168.1.50",
-      onPut: () => this.release()
+      onPut: () => this.reconnect()
     },
     accessCode: {
       title: "Access Code",
       type: "password",
       description: "On the printer screen under Settings, Network.",
-      onPut: () => this.release()
+      onPut: () => this.reconnect()
     },
     camera: {
       title: "Camera",
@@ -232,22 +253,45 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
     this.source = undefined;
   }
 
-  private async applyCamera() {
-    this.release();
-    await deviceManager.onDeviceDiscovered({
+  private register(info: DeviceInformation | undefined) {
+    return deviceManager.onDeviceDiscovered({
       nativeId: this.nativeId,
       name: this.name!,
       type: ScryptedDeviceType.Camera,
       interfaces: interfacesFor(this.storageSettings.values.camera),
-      info: this.info
+      info
     });
   }
 
-  getSettings(): Promise<Setting[]> {
-    return this.storageSettings.getSettings();
+  private async applyCamera() {
+    this.release();
+    await this.register(this.info);
+  }
+
+  private reconnect() {
+    this.release();
+    this.refreshInfo().catch((e: Error) => this.console.error("printer info:", e.message));
+  }
+
+  async refreshInfo() {
+    const { host, accessCode } = this.storageSettings.values;
+    await this.register(infoFor(host, await identifyPrinter(host, accessCode)));
+  }
+
+  async getSettings(): Promise<Setting[]> {
+    return [
+      ...(await this.storageSettings.getSettings()),
+      {
+        key: "refresh",
+        title: "Refresh Printer Info",
+        description: "Read the model, firmware and nozzle from the printer again.",
+        type: "button"
+      }
+    ];
   }
 
   putSetting(key: string, value: SettingValue): Promise<void> {
+    if (key === "refresh") return this.refreshInfo();
     return this.storageSettings.putSetting(key, value);
   }
 
