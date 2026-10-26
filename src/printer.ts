@@ -24,7 +24,13 @@ import { StorageSettings } from "@scrypted/sdk/storage-settings";
 import { ChamberClient } from "./chamber.ts";
 import { FrameFeed } from "./feed.ts";
 import { identifyPrinter, type PrinterIdentity } from "./identify.ts";
-import { chamberInputArguments, DEFAULT_ENCODER_ARGUMENTS, splitArguments } from "./pipeline.ts";
+import {
+  chamberInputArguments,
+  DEFAULT_ENCODER_ARGUMENTS,
+  FRAME_PACING_MS,
+  splitArguments,
+  STALE_FRAME_MS
+} from "./pipeline.ts";
 
 const { deviceManager, mediaManager } = sdk;
 
@@ -102,10 +108,14 @@ class ChamberSource implements CameraSource {
     this.printer = printer;
     const { host, accessCode } = printer.storageSettings.values;
     this.client = new ChamberClient(host, accessCode, printer.console);
-    this.feed = new FrameFeed((count) => {
-      this.feedClients = count;
-      this.scheduleIdle();
-    });
+    this.feed = new FrameFeed(
+      (count) => {
+        this.feedClients = count;
+        this.scheduleIdle();
+      },
+      printer.storageSettings.values.framePacing ? FRAME_PACING_MS : 0,
+      STALE_FRAME_MS
+    );
     this.client.on("frame", (frame) => this.feed.push(frame));
   }
 
@@ -226,6 +236,14 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
       choices: [DEFAULT_ENCODER_ARGUMENTS],
       defaultValue: DEFAULT_ENCODER_ARGUMENTS,
       onPut: () => this.release()
+    },
+    framePacing: {
+      title: "Steady Frame Pacing",
+      type: "boolean",
+      defaultValue: true,
+      description:
+        "Resend the latest chamber frame every 100 ms so the encoder outputs a steady stream. Without it frames reach live viewers in bursts every second or two, which HomeKit treats as a bad connection and stops showing video.",
+      onPut: () => this.release()
     }
   });
 
@@ -235,7 +253,8 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
     super(nativeId);
     this.storageSettings.options = {
       hide: {
-        encoderArguments: async () => this.storageSettings.values.camera !== "chamber"
+        encoderArguments: async () => this.storageSettings.values.camera !== "chamber",
+        framePacing: async () => this.storageSettings.values.camera !== "chamber"
       }
     };
   }

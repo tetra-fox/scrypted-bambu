@@ -9,6 +9,12 @@ export const WALL_CLOCK_FILTER = "setpts=(RTCTIME-RTCSTART)/(TB*1000000)";
 // 10 fps repeats the ~1 fps source for players, the 2 second gop keeps startup quick
 export const DEFAULT_ENCODER_ARGUMENTS = `-vf ${WALL_CLOCK_FILTER} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -r 10 -g 20 -bf 0 -b:v 1000k -maxrate 1000k -bufsize 2000k`;
 
+// frame pacing feeds ffmpeg at the same 10 fps the encoder outputs
+export const FRAME_PACING_MS = 100;
+// pacing stops once the printer has been silent this long, so a dead printer stalls
+// ffmpeg and the stream ends instead of freezing on the last frame
+export const STALE_FRAME_MS = 5000;
+
 export const splitArguments = (value: string): string[] => {
   return value.split(" ").filter((arg) => arg);
 };
