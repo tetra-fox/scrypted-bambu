@@ -42,7 +42,8 @@ test("pacing stops when the last reader leaves", async () => {
   await sleep(60);
   response.destroy();
   await sleep(40);
-  assert.equal((feed as unknown as { pacer?: NodeJS.Timeout }).pacer, undefined);
+  // bracket access reaches the private field and still fails to compile if it is renamed
+  assert.equal(feed["pacer"], undefined);
   feed.close();
 });
 
