@@ -6,11 +6,13 @@ export const chamberInputArguments = (url: string): string[] => {
 // ffmpeg 6.1 (what scrypted ships) ignores -use_wallclock_as_timestamps for mjpeg input
 export const WALL_CLOCK_FILTER = "setpts=(RTCTIME-RTCSTART)/(TB*1000000)";
 
-// 10 fps repeats the ~1 fps source for players, the 2 second gop keeps startup quick
-export const DEFAULT_ENCODER_ARGUMENTS = `-vf ${WALL_CLOCK_FILTER} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -r 10 -g 20 -bf 0 -b:v 1000k -maxrate 1000k -bufsize 2000k`;
+// the feed resends the ~1 fps source at the rate the encoder outputs
+const FRAME_RATE = 10;
+export const FRAME_PACING_MS = 1000 / FRAME_RATE;
 
-// frame pacing feeds ffmpeg at the same 10 fps the encoder outputs
-export const FRAME_PACING_MS = 100;
+// the 2 second gop keeps startup quick
+export const DEFAULT_ENCODER_ARGUMENTS = `-vf ${WALL_CLOCK_FILTER} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -r ${FRAME_RATE} -g ${FRAME_RATE * 2} -bf 0 -b:v 1000k -maxrate 1000k -bufsize 2000k`;
+
 // pacing stops once the printer has been silent this long, so a dead printer stalls
 // ffmpeg and the stream ends instead of freezing on the last frame
 export const STALE_FRAME_MS = 5000;
