@@ -280,6 +280,9 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
 
   private reconnect() {
     this.release();
+    // createDevice stores host and access code one at a time
+    const { host, accessCode } = this.storageSettings.values;
+    if (!host || !accessCode) return;
     this.refreshInfo().catch((e: Error) => this.console.error("printer info:", e.message));
   }
 
