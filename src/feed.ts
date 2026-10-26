@@ -13,10 +13,9 @@ export class FrameFeed {
   private latestAt = 0;
   private pacer?: NodeJS.Timeout;
 
-  // paceMs > 0 resends the newest frame on that interval while anyone is reading,
-  // 0 forwards each frame once as it arrives. resends stop once the newest frame is
-  // staleMs old, so a source that went quiet stalls readers instead of freezing them
-  constructor(onClientCount: (count: number) => void, paceMs = 0, staleMs = Infinity) {
+  // resends the newest frame every paceMs while anyone is reading, until it is staleMs old.
+  // a source that went quiet then stalls readers instead of freezing them
+  constructor(onClientCount: (count: number) => void, paceMs: number, staleMs: number) {
     this.onClientCount = onClientCount;
     this.paceMs = paceMs;
     this.staleMs = staleMs;
@@ -51,15 +50,13 @@ export class FrameFeed {
   push(frame: Buffer) {
     this.latest = frame;
     this.latestAt = Date.now();
-    // the pacer picks it up on its next tick
-    if (!this.pacer) this.broadcast(frame);
   }
 
-  // the printer sends a frame every second or two. Forwarded as they arrive, ffmpeg can
-  // only write the -r duplicates for an interval once the next frame shows up, so live
-  // players get a burst of frames followed by silence. A steady input keeps the output steady.
+  // the printer sends a frame every second or two. ffmpeg only writes the -r duplicates for
+  // a gap once the next frame arrives, so forwarding frames as they come gives live players
+  // a burst of frames followed by silence. a steady input keeps the output steady
   private startPacing() {
-    if (!this.paceMs || this.pacer) return;
+    if (this.pacer) return;
     this.pacer = setInterval(() => {
       if (this.latest && Date.now() - this.latestAt < this.staleMs) this.broadcast(this.latest);
     }, this.paceMs);

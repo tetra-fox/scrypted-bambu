@@ -113,7 +113,7 @@ class ChamberSource implements CameraSource {
         this.feedClients = count;
         this.scheduleIdle();
       },
-      printer.storageSettings.values.framePacing ? FRAME_PACING_MS : 0,
+      FRAME_PACING_MS,
       STALE_FRAME_MS
     );
     this.client.on("frame", (frame) => this.feed.push(frame));
@@ -236,13 +236,6 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
       choices: [DEFAULT_ENCODER_ARGUMENTS],
       defaultValue: DEFAULT_ENCODER_ARGUMENTS,
       onPut: () => this.release()
-    },
-    framePacing: {
-      title: "Steady Frame Pacing",
-      type: "boolean",
-      defaultValue: true,
-      description: `Resend the latest chamber frame every ${FRAME_PACING_MS} ms so the encoder outputs a steady stream. Without it frames reach live viewers in bursts every second or two, which HomeKit treats as a bad connection and stops showing video. Resends stop after ${STALE_FRAME_MS / 1000} s without a new frame, so an offline printer shows no video rather than a frozen frame.`,
-      onPut: () => this.release()
     }
   });
 
@@ -252,8 +245,7 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
     super(nativeId);
     this.storageSettings.options = {
       hide: {
-        encoderArguments: async () => this.storageSettings.values.camera !== "chamber",
-        framePacing: async () => this.storageSettings.values.camera !== "chamber"
+        encoderArguments: async () => this.storageSettings.values.camera !== "chamber"
       }
     };
   }

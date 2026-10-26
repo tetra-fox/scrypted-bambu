@@ -25,19 +25,14 @@ const countParts = async (feed: FrameFeed, ms: number) => {
   return body.split("--frame\r\n").length - 1;
 };
 
-test("without pacing a reader gets the latest frame once", async () => {
-  const parts = await countParts(new FrameFeed(() => {}), 300);
-  assert.equal(parts, 1);
-});
-
-test("with pacing the latest frame is resent on the interval", async () => {
-  const parts = await countParts(new FrameFeed(() => {}, 50), 320);
+test("the latest frame is resent on the interval", async () => {
+  const parts = await countParts(new FrameFeed(() => {}, 50, Infinity), 320);
   // one on connect plus ~6 ticks in 320 ms, allow for timer jitter
   assert.ok(parts >= 5 && parts <= 8, `got ${parts} parts`);
 });
 
 test("pacing stops when the last reader leaves", async () => {
-  const feed = new FrameFeed(() => {}, 20);
+  const feed = new FrameFeed(() => {}, 20, Infinity);
   const response = await connect(feed);
   await sleep(60);
   response.destroy();

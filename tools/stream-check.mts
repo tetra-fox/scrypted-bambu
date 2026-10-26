@@ -5,7 +5,9 @@ import { FrameFeed } from "../src/feed.ts";
 import {
   chamberInputArguments,
   DEFAULT_ENCODER_ARGUMENTS,
-  splitArguments
+  FRAME_PACING_MS,
+  splitArguments,
+  STALE_FRAME_MS
 } from "../src/pipeline.ts";
 
 const [host, accessCode, seconds = "12"] = process.argv.slice(2);
@@ -14,7 +16,11 @@ if (!host || !accessCode) {
   process.exit(2);
 }
 
-const feed = new FrameFeed((count) => console.log(`feed clients: ${count}`));
+const feed = new FrameFeed(
+  (count) => console.log(`feed clients: ${count}`),
+  FRAME_PACING_MS,
+  STALE_FRAME_MS
+);
 const client = new ChamberClient(host, accessCode, console);
 client.on("frame", (frame) => feed.push(frame));
 client.start();
