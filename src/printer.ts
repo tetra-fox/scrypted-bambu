@@ -241,8 +241,7 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
       title: "Steady Frame Pacing",
       type: "boolean",
       defaultValue: true,
-      description:
-        "Resend the latest chamber frame every 100 ms so the encoder outputs a steady stream. Without it frames reach live viewers in bursts every second or two, which HomeKit treats as a bad connection and stops showing video.",
+      description: `Resend the latest chamber frame every ${FRAME_PACING_MS} ms so the encoder outputs a steady stream. Without it frames reach live viewers in bursts every second or two, which HomeKit treats as a bad connection and stops showing video. Resends stop after ${STALE_FRAME_MS / 1000} s without a new frame, so an offline printer shows no video rather than a frozen frame.`,
       onPut: () => this.release()
     }
   });
