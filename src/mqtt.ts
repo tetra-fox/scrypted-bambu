@@ -101,11 +101,17 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
     return new Promise((resolve, reject) => {
       const socket = connect({ host, port: MQTT_PORT, rejectUnauthorized: false });
       const client = new MqttClient(socket);
-      // the broker answers every ping, so a quiet socket past 1.5x the keepalive is a dead link
-      socket.setTimeout(KEEPALIVE_S * 1500);
-      socket.on("timeout", () =>
-        socket.destroy(new Error(`printer mqtt silent for ${KEEPALIVE_S * 1.5}s`))
-      );
+      // the broker answers every ping, so nothing read for 1.5x the keepalive is a dead link.
+      // socket.setTimeout can't tell, the pings reset it too
+      let watchdog: NodeJS.Timeout | undefined;
+      const heard = () => {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(
+          () => socket.destroy(new Error(`silent for ${KEEPALIVE_S * 1.5}s`)),
+          KEEPALIVE_S * 1500
+        );
+      };
+      heard();
       socket.once("error", reject);
       socket.on("secureConnect", () => {
         const header = Buffer.concat([
@@ -120,6 +126,7 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
         socket.write(packet(CONNECT, Buffer.concat([header, payload])));
       });
       socket.on("data", (chunk: Buffer) => {
+        heard();
         for (const { type, body } of client.parser.push(chunk)) {
           if (type === CONNACK >> 4) {
             const code = body[1];
@@ -146,6 +153,7 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
       });
       socket.on("close", () => {
         clearInterval(client.pinger);
+        clearTimeout(watchdog);
         // no effect once the login was accepted or refused
         reject(new Error("printer closed the mqtt connection before answering the login"));
         client.emit("close");
