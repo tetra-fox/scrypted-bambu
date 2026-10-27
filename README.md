@@ -15,7 +15,11 @@ The RTSP path is written from the published stream URL and has not been tested a
 
 1. Put the printer in LAN mode or at least note its IP and the access code from the printer screen (Settings, Network).
 2. In Scrypted, add a device of type Bambu Lab Printer and fill in the IP and access code. Leave Camera on auto unless the printer is a model this plugin does not know, in which case it probes port 322.
-3. Enable the extensions you want on the new camera (HomeKit, NVR).
+3. Enable the extensions you want on the new camera (HomeKit, NVR). For the light switch to show up on the camera's HomeKit accessory, enable HomeKit on the printer's Chamber Light device as well.
+
+## chamber light
+
+Each printer gets a Chamber Light device that switches the printer's chamber light, both of them on H2 and X2 printers. The plugin keeps an MQTT connection to the printer open for the light's state, so switching it from the printer screen or Bambu Studio shows up in Scrypted too.
 
 ## caveats
 

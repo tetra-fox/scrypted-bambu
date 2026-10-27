@@ -1,6 +1,7 @@
 import { connect } from "node:tls";
 
 import { MQTT_PORT, MqttClient } from "./mqtt.ts";
+import { PUSHALL, reportTopic, requestTopic } from "./report.ts";
 
 export interface PrinterIdentity {
   serial: string;
@@ -88,15 +89,12 @@ export const identifyPrinter = async (
         gotReport();
       }
     });
-    client.subscribe(`device/${serial}/report`);
+    client.subscribe(reportTopic(serial));
     client.publish(
-      `device/${serial}/request`,
+      requestTopic(serial),
       JSON.stringify({ info: { sequence_id: "0", command: "get_version" } })
     );
-    client.publish(
-      `device/${serial}/request`,
-      JSON.stringify({ pushing: { sequence_id: "0", command: "pushall" } })
-    );
+    client.publish(requestTopic(serial), JSON.stringify(PUSHALL));
     await Promise.race([version, failed]);
     // the full report is a bonus, not every firmware answers pushall
     await Promise.race([report, new Promise((r) => setTimeout(r, REPORT_GRACE_MS).unref())]);

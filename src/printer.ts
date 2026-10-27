@@ -5,9 +5,11 @@ import sdk, {
   type AudioStreamOptions,
   type Camera,
   type DeviceInformation,
+  type DeviceProvider,
   type FFmpegInput,
   type MediaObject,
   type MediaStreamUrl,
+  type OnOff,
   type ResponseMediaStreamOptions,
   type ResponsePictureOptions,
   ScryptedDeviceBase,
@@ -31,6 +33,7 @@ import {
   splitArguments,
   STALE_FRAME_MS
 } from "./pipeline.ts";
+import { chamberLightModes, ledctrl, type Report, ReportClient } from "./report.ts";
 
 const { deviceManager, mediaManager } = sdk;
 
@@ -66,7 +69,12 @@ export const infoFor = (host: string, identity: PrinterIdentity): DeviceInformat
 });
 
 export const interfacesFor = (camera: CameraKind): ScryptedInterface[] => {
-  const interfaces = [ScryptedInterface.VideoCamera, ScryptedInterface.Settings];
+  // the provider of the chamber light
+  const interfaces = [
+    ScryptedInterface.VideoCamera,
+    ScryptedInterface.Settings,
+    ScryptedInterface.DeviceProvider
+  ];
   // only the chamber protocol yields jpegs, rtsp snapshots come from the prebuffer
   if (camera === "chamber") interfaces.push(ScryptedInterface.Camera);
   return interfaces;
@@ -207,7 +215,31 @@ class RtspSource implements CameraSource {
   release() {}
 }
 
-export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Camera, Settings {
+// a child device so the homekit plugin adds it to the camera accessory as a switch. onoff on the
+// camera itself would drive the camera's status indicator instead
+class ChamberLight extends ScryptedDeviceBase implements OnOff {
+  private readonly printer: BambuPrinter;
+
+  constructor(nativeId: string, printer: BambuPrinter) {
+    super(nativeId);
+    this.printer = printer;
+  }
+
+  async turnOn() {
+    this.printer.setChamberLight(true);
+    this.on = true;
+  }
+
+  async turnOff() {
+    this.printer.setChamberLight(false);
+    this.on = false;
+  }
+}
+
+export class BambuPrinter
+  extends ScryptedDeviceBase
+  implements VideoCamera, Camera, Settings, DeviceProvider
+{
   storageSettings = new StorageSettings(this, {
     host: {
       title: "IP Address",
@@ -235,19 +267,30 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
       combobox: true,
       choices: [DEFAULT_ENCODER_ARGUMENTS],
       defaultValue: DEFAULT_ENCODER_ARGUMENTS,
-      onPut: () => this.release()
+      onPut: () => this.releaseCamera()
     }
   });
 
+  // the native id is the serial, see createDevice
+  private readonly serial: string;
   private source?: CameraSource;
+  private report?: ReportClient;
+  private light?: ChamberLight;
+  // last reported mode of each chamber light node
+  private readonly lightModes: Record<string, string> = {};
 
   constructor(nativeId: string) {
     super(nativeId);
+    this.serial = nativeId;
     this.storageSettings.options = {
       hide: {
         encoderArguments: async () => this.storageSettings.values.camera !== "chamber"
       }
     };
+    this.startReports();
+    // a printer registered without the light device gets it on start
+    if (!this.interfaces?.includes(ScryptedInterface.DeviceProvider))
+      this.register(undefined).catch((e: Error) => this.console.error("register:", e.message));
   }
 
   private getSource(): CameraSource {
@@ -258,31 +301,98 @@ export class BambuPrinter extends ScryptedDeviceBase implements VideoCamera, Cam
     return this.source;
   }
 
-  release() {
+  private releaseCamera() {
     this.source?.release();
     this.source = undefined;
   }
 
-  private register(info: DeviceInformation | undefined) {
-    return deviceManager.onDeviceDiscovered({
+  release() {
+    this.releaseCamera();
+    this.report?.stop();
+    this.report = undefined;
+  }
+
+  // undefined while createDevice is storing host and access code one at a time
+  private credentials() {
+    const { host, accessCode } = this.storageSettings.values;
+    return host && accessCode ? { host, accessCode } : undefined;
+  }
+
+  private startReports() {
+    this.report?.stop();
+    this.report = undefined;
+    const credentials = this.credentials();
+    if (!credentials) return;
+    this.report = new ReportClient(
+      credentials.host,
+      credentials.accessCode,
+      this.serial,
+      this.console
+    );
+    this.report.on("report", (report) => this.onReport(report));
+    this.report.start();
+  }
+
+  private onReport(report: Report) {
+    const modes = chamberLightModes(report);
+    if (!modes) return;
+    Object.assign(this.lightModes, modes);
+    const on = this.chamberLightOn();
+    if (this.light && this.light.on !== on) this.light.on = on;
+  }
+
+  private chamberLightOn() {
+    return Object.values(this.lightModes).includes("on");
+  }
+
+  setChamberLight(on: boolean) {
+    if (!this.report) throw new Error("set the ip address and access code first");
+    // ha-bambulab switches a second chamber light together with the first. before the first
+    // report the printer's nodes are unknown, every model has chamber_light
+    const nodes = Object.keys(this.lightModes);
+    for (const node of nodes.length ? nodes : ["chamber_light"]) {
+      this.report.request(ledctrl(node, on));
+      this.lightModes[node] = on ? "on" : "off";
+    }
+  }
+
+  private async register(info: DeviceInformation | undefined) {
+    await deviceManager.onDeviceDiscovered({
       nativeId: this.nativeId,
       name: this.name!,
       type: ScryptedDeviceType.Camera,
       interfaces: interfacesFor(this.storageSettings.values.camera),
       info
     });
+    await deviceManager.onDeviceDiscovered({
+      nativeId: `${this.serial}-light`,
+      providerNativeId: this.nativeId,
+      name: `${this.name} Chamber Light`,
+      type: ScryptedDeviceType.Light,
+      interfaces: [ScryptedInterface.OnOff]
+    });
+  }
+
+  async getDevice(nativeId: string): Promise<ChamberLight> {
+    this.light ??= new ChamberLight(nativeId, this);
+    // reports can arrive before scrypted asks for the light
+    if (Object.keys(this.lightModes).length) this.light.on = this.chamberLightOn();
+    return this.light;
+  }
+
+  async releaseDevice(): Promise<void> {
+    this.light = undefined;
   }
 
   private async applyCamera() {
-    this.release();
+    this.releaseCamera();
     await this.register(this.info);
   }
 
   private reconnect() {
-    this.release();
-    // createDevice stores host and access code one at a time
-    const { host, accessCode } = this.storageSettings.values;
-    if (!host || !accessCode) return;
+    this.releaseCamera();
+    this.startReports();
+    if (!this.credentials()) return;
     this.refreshInfo().catch((e: Error) => this.console.error("printer info:", e.message));
   }
 
