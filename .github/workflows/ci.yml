@@ -29,7 +29,10 @@ jobs:
       contents: write
       id-token: write
     steps:
+      # the release notes need the previous tag and the commits since it
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: pnpm/setup@v3
         with:
           cache: true
@@ -52,4 +55,23 @@ jobs:
       - if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.version.outputs.tag }}" --generate-notes
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          # grep exits 1 when a section has no commits
+          log=$(git log --no-merges --format='%s (%h)' "${prev:+$prev..}HEAD" | grep -v '^chore: bump version' || true)
+          # section <title> <grep args>
+          section() {
+            [ -n "$log" ] || return 0
+            title=$1
+            shift
+            lines=$(grep -E "$@" <<<"$log" | sed 's/^/- /' || true)
+            if [ -n "$lines" ]; then printf '## %s\n\n%s\n\n' "$title" "$lines"; fi
+          }
+          {
+            section features '^feat[(:!]'
+            section fixes '^fix[(:!]'
+            section other -v '^(feat|fix)[(:!]'
+            if [ -n "$prev" ]; then echo "https://github.com/$GITHUB_REPOSITORY/compare/$prev...$TAG"; fi
+          } > notes.md
+          gh release create "$TAG" --notes-file notes.md
