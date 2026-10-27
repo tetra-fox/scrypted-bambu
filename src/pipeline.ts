@@ -10,8 +10,9 @@ export const WALL_CLOCK_FILTER = "setpts=(RTCTIME-RTCSTART)/(TB*1000000)";
 const FRAME_RATE = 10;
 export const FRAME_PACING_MS = 1000 / FRAME_RATE;
 
-// the 2 second gop keeps startup quick
-export const DEFAULT_ENCODER_ARGUMENTS = `-vf ${WALL_CLOCK_FILTER} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -r ${FRAME_RATE} -g ${FRAME_RATE * 2} -bf 0 -b:v 1000k -maxrate 1000k -bufsize 2000k`;
+// the 2 second gop keeps startup quick. no -tune zerolatency, homekit live view buffers
+// forever on that output when it copies the stream instead of transcoding
+export const DEFAULT_ENCODER_ARGUMENTS = `-vf ${WALL_CLOCK_FILTER} -c:v libx264 -preset ultrafast -pix_fmt yuv420p -r ${FRAME_RATE} -g ${FRAME_RATE * 2} -bf 0 -b:v 1000k -maxrate 1000k -bufsize 2000k`;
 
 // pacing stops once the printer has been silent this long, so a dead printer stalls
 // ffmpeg and the stream ends instead of freezing on the last frame
