@@ -8,6 +8,7 @@ const CONNECT = 0x10;
 const CONNACK = 0x20;
 const PUBLISH = 0x30;
 const SUBSCRIBE = 0x82;
+const PINGREQ = 0xc0;
 const DISCONNECT = 0xe0;
 const CONNECT_FLAGS_USER_PASS_CLEAN = 0xc2;
 
@@ -88,6 +89,7 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
   private readonly socket: TLSSocket;
   private readonly parser = new PacketParser();
   private packetId = 1;
+  private pinger?: NodeJS.Timeout;
 
   private constructor(socket: TLSSocket) {
     super();
@@ -99,6 +101,11 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
     return new Promise((resolve, reject) => {
       const socket = connect({ host, port: MQTT_PORT, rejectUnauthorized: false });
       const client = new MqttClient(socket);
+      // the broker answers every ping, so a quiet socket past 1.5x the keepalive is a dead link
+      socket.setTimeout(KEEPALIVE_S * 1500);
+      socket.on("timeout", () =>
+        socket.destroy(new Error(`printer mqtt silent for ${KEEPALIVE_S * 1.5}s`))
+      );
       socket.once("error", reject);
       socket.on("secureConnect", () => {
         const header = Buffer.concat([
@@ -119,6 +126,10 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
             if (code === 0) {
               socket.off("error", reject);
               socket.on("error", (e) => client.emit("error", e));
+              client.pinger = setInterval(
+                () => socket.write(packet(PINGREQ, Buffer.alloc(0))),
+                KEEPALIVE_S * 1000
+              );
               resolve(client);
             } else {
               socket.destroy();
@@ -133,7 +144,12 @@ export class MqttClient extends EventEmitter<{ message: [Message]; error: [Error
           }
         }
       });
-      socket.on("close", () => client.emit("close"));
+      socket.on("close", () => {
+        clearInterval(client.pinger);
+        // no effect once the login was accepted or refused
+        reject(new Error("printer closed the mqtt connection before answering the login"));
+        client.emit("close");
+      });
     });
   }
 
